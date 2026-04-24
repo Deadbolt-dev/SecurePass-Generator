@@ -1,0 +1,1897 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VAULT — Bespoke Password Sanctum</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Share+Tech+Mono&display=swap"
+    rel="stylesheet" />
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    :root {
+      --gold: #d4af37;
+      --gold2: #f3e5ab;
+      --gold3: #aa8000;
+      --gold-glow: rgba(212, 175, 55, 0.4);
+      --bg: #05050a;
+      --surface: rgba(15, 15, 20, 0.65);
+      --border: rgba(212, 175, 55, 0.25);
+      --text: #f0e6d2;
+      --muted: #8c7a56;
+      --dim: #3a3020;
+      --weak: #e74c3c;
+      --medium: #f39c12;
+      --strong: #2ecc71;
+      --r: 24px;
+    }
+
+    html {
+      scroll-behavior: smooth
+    }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      font-family: 'Cormorant Garamond', serif;
+      color: var(--text);
+      overflow-x: hidden;
+      cursor: crosshair;
+      background-image:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(212, 175, 55, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 70% at 80% 90%, rgba(70, 40, 140, 0.09) 0%, transparent 60%),
+        radial-gradient(circle at 50% 50%, rgba(212, 175, 55, 0.03) 0%, transparent 80%);
+    }
+
+    .bg-orb {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 80vw;
+      height: 80vw;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(212, 175, 55, 0.06) 0%, transparent 60%);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+      animation: breathe 8s ease-in-out infinite alternate;
+    }
+
+    @keyframes breathe {
+      0% {
+        transform: translate(-50%, -50%) scale(0.9);
+        opacity: 0.5;
+      }
+
+      100% {
+        transform: translate(-50%, -50%) scale(1.1);
+        opacity: 1;
+      }
+    }
+
+    /* ══════════════════════════════════════════
+   CANVAS BACKGROUND
+══════════════════════════════════════════ */
+    #bg-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.55
+    }
+
+    /* ══════════════════════════════════════════
+   FLOATING VAULT SYMBOLS
+══════════════════════════════════════════ */
+    .vault-symbols {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      overflow: hidden
+    }
+
+    .vsym {
+      position: absolute;
+      font-size: clamp(18px, 3vw, 36px);
+      color: rgba(201, 168, 76, 0.08);
+      animation: floatSym linear infinite;
+      font-family: 'Share Tech Mono', monospace;
+      user-select: none;
+    }
+
+    @keyframes floatSym {
+      0% {
+        transform: translateY(110vh) rotate(0deg);
+        opacity: 0
+      }
+
+      5% {
+        opacity: 1
+      }
+
+      90% {
+        opacity: 0.6
+      }
+
+      100% {
+        transform: translateY(-20vh) rotate(360deg);
+        opacity: 0
+      }
+    }
+
+    /* ══════════════════════════════════════════
+   SCAN LINE OVERLAY
+══════════════════════════════════════════ */
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.04) 2px, rgba(0, 0, 0, 0.04) 4px);
+      animation: scanMove 8s linear infinite;
+    }
+
+    @keyframes scanMove {
+      0% {
+        background-position: 0 0
+      }
+
+      100% {
+        background-position: 0 100px
+      }
+    }
+
+    /* Moving scanline beam */
+    .scan-beam {
+      position: fixed;
+      left: 0;
+      right: 0;
+      height: 2px;
+      z-index: 3;
+      pointer-events: none;
+      background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.15), rgba(201, 168, 76, 0.4), rgba(201, 168, 76, 0.15), transparent);
+      animation: beamMove 6s ease-in-out infinite;
+      box-shadow: 0 0 12px rgba(201, 168, 76, 0.3);
+    }
+
+    @keyframes beamMove {
+
+      0%,
+      100% {
+        top: -2px;
+        opacity: 0
+      }
+
+      5% {
+        opacity: 1
+      }
+
+      95% {
+        opacity: 0.8
+      }
+
+      50% {
+        top: 100vh
+      }
+    }
+
+    /* ══════════════════════════════════════════
+   MAIN LAYOUT
+══════════════════════════════════════════ */
+    .page {
+      position: relative;
+      z-index: 10;
+      padding: 3rem 1.5rem 5rem;
+      max-width: 680px;
+      margin: 0 auto
+    }
+
+    /* ══════════════════════════════════════════
+   HEADER
+══════════════════════════════════════════ */
+    .header {
+      text-align: center;
+      margin-bottom: 3rem
+    }
+
+    /* Rotating vault dial */
+    .vault-emblem {
+      display: inline-block;
+      position: relative;
+      width: 90px;
+      height: 90px;
+      margin-bottom: 1rem
+    }
+
+    .vault-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 1.5px solid rgba(201, 168, 76, 0.3);
+      animation: ringRotate 12s linear infinite;
+    }
+
+    .vault-ring-2 {
+      position: absolute;
+      inset: 6px;
+      border-radius: 50%;
+      border: 1px solid rgba(201, 168, 76, 0.15);
+      animation: ringRotate 8s linear infinite reverse;
+    }
+
+    .vault-ring-3 {
+      position: absolute;
+      inset: 14px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(201, 168, 76, 0.25);
+      animation: ringRotate 20s linear infinite;
+    }
+
+    @keyframes ringRotate {
+      0% {
+        transform: rotate(0deg)
+      }
+
+      100% {
+        transform: rotate(360deg)
+      }
+    }
+
+    .vault-notch {
+      position: absolute;
+      width: 5px;
+      height: 5px;
+      background: var(--gold);
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 8px var(--gold-glow), 0 0 20px var(--gold-glow);
+      animation: pulseDot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulseDot {
+
+      0%,
+      100% {
+        box-shadow: 0 0 8px var(--gold-glow), 0 0 20px var(--gold-glow)
+      }
+
+      50% {
+        box-shadow: 0 0 12px var(--gold-glow), 0 0 35px var(--gold-glow), 0 0 60px rgba(201, 168, 76, 0.15)
+      }
+    }
+
+    /* Tick marks on ring */
+    .vault-ring::before {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1px;
+      height: 6px;
+      background: var(--gold);
+    }
+
+    .eyebrow {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 5px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 0.8rem;
+      animation: fadeIn 1.2s ease both;
+    }
+
+    h1 {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(2rem, 6vw, 3.2rem);
+      font-weight: 900;
+      background: linear-gradient(135deg, #8a6820 0%, #c9a84c 30%, #f5d678 55%, #c9a84c 75%, #8a6820 100%);
+      background-size: 200% 100%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmerText 4s linear infinite, fadeIn 1s ease 0.3s both;
+      margin-bottom: 0.4rem;
+      letter-spacing: 6px;
+    }
+
+    @keyframes shimmerText {
+      0% {
+        background-position: 0% 50%
+      }
+
+      100% {
+        background-position: 200% 50%
+      }
+    }
+
+    .tagline {
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic;
+      font-size: 1rem;
+      color: var(--muted);
+      letter-spacing: 2px;
+      animation: fadeIn 1s ease 0.6s both;
+    }
+
+    .deco {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin: 1rem auto 0;
+      animation: fadeIn 1s ease 0.9s both;
+    }
+
+    .deco-line {
+      height: 1px;
+      width: 80px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent)
+    }
+
+    .deco-sym {
+      font-size: 10px;
+      color: var(--gold);
+      letter-spacing: 4px;
+      font-family: 'Share Tech Mono', monospace
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    /* ══════════════════════════════════════════
+   MAIN CARD
+══════════════════════════════════════════ */
+    .card {
+      position: relative;
+      background: var(--surface);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 3rem 2.5rem;
+      box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.05), 0 30px 80px rgba(0, 0, 0, 0.8), 0 0 60px rgba(212, 175, 55, 0.08), inset 0 1px 0 rgba(212, 175, 55, 0.15);
+      animation: fadeIn 1s cubic-bezier(0.16, 1, 0.3, 1) 1s both;
+    }
+
+    /* Animated border glow */
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: calc(var(--r) + 1px);
+      background: linear-gradient(135deg, rgba(201, 168, 76, 0.3), transparent 30%, transparent 70%, rgba(201, 168, 76, 0.15));
+      z-index: -1;
+      animation: borderRotate 8s linear infinite;
+    }
+
+    @keyframes borderRotate {
+
+      0%,
+      100% {
+        opacity: 0.5
+      }
+
+      50% {
+        opacity: 1
+      }
+    }
+
+    /* Corner ornaments */
+    .co {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-color: rgba(201, 168, 76, 0.4);
+      border-style: solid
+    }
+
+    .co-tl {
+      top: 12px;
+      left: 12px;
+      border-width: 1.5px 0 0 1.5px;
+      border-radius: 3px 0 0 0
+    }
+
+    .co-tr {
+      top: 12px;
+      right: 12px;
+      border-width: 1.5px 1.5px 0 0;
+      border-radius: 0 3px 0 0
+    }
+
+    .co-bl {
+      bottom: 12px;
+      left: 12px;
+      border-width: 0 0 1.5px 1.5px;
+      border-radius: 0 0 0 3px
+    }
+
+    .co-br {
+      bottom: 12px;
+      right: 12px;
+      border-width: 0 1.5px 1.5px 0;
+      border-radius: 0 0 3px 0
+    }
+
+    /* ══════════════════════════════════════════
+   FORM
+══════════════════════════════════════════ */
+    .field-lbl {
+      display: block;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 3.5px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 0.7rem;
+    }
+
+    .input-wrap {
+      position: relative
+    }
+
+    .input-ico {
+      position: absolute;
+      left: 1.1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      pointer-events: none;
+      transition: color 0.3s;
+      font-size: 1.1rem;
+    }
+
+    input[type=text],
+    input[type=date] {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.2rem 1rem 3rem;
+      color: var(--text);
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.2rem;
+      letter-spacing: 2px;
+      outline: none;
+      transition: all 0.35s ease;
+    }
+
+    input[type=date] {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 1rem;
+      color-scheme: dark;
+    }
+
+    input[type=text]:focus,
+    input[type=date]:focus {
+      border-color: rgba(212, 175, 55, 0.6);
+      box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.08), 0 0 30px rgba(212, 175, 55, 0.1);
+      background: rgba(212, 175, 55, 0.05);
+    }
+
+    input[type=text]:focus~.input-ico,
+    input[type=date]:focus~.input-ico {
+      color: var(--gold)
+    }
+
+    input[type=text]::placeholder {
+      color: var(--dim);
+      font-style: italic
+    }
+
+    /* Sound toggle */
+    .sound-toggle {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      z-index: 100;
+      background: rgba(10, 10, 10, 0.85);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      border-radius: 50%;
+      width: 52px;
+      height: 52px;
+      color: var(--muted);
+      font-size: 20px;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+    }
+
+    .sound-toggle:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+      transform: scale(1.08);
+      box-shadow: 0 0 25px rgba(212, 175, 55, 0.25);
+    }
+
+    .sound-toggle.on {
+      color: var(--gold);
+      border-color: rgba(212, 175, 55, 0.6);
+      background: rgba(212, 175, 55, 0.15);
+    }
+
+    .analyze-btn {
+      width: 100%;
+      margin-top: 1.3rem;
+      padding: 1.1rem;
+      background: linear-gradient(135deg, #7a5518, #c9a84c, #f5d678, #c9a84c, #7a5518);
+      background-size: 300% 100%;
+      border: none;
+      border-radius: 10px;
+      color: #050305;
+      font-family: 'Cinzel', serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background-position 0.6s, transform 0.2s, box-shadow 0.3s;
+      box-shadow: 0 4px 20px rgba(201, 168, 76, 0.2);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .analyze-btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transform: translateX(-100%);
+      transition: transform 0.7s;
+    }
+
+    .analyze-btn:hover::after {
+      transform: translateX(100%)
+    }
+
+    .analyze-btn:hover {
+      background-position: right center;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 35px rgba(201, 168, 76, 0.3)
+    }
+
+    .analyze-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 4px 20px rgba(201, 168, 76, 0.2)
+    }
+
+    .reset-link {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: color 0.3s;
+      margin-top: 1.5rem;
+      display: inline-block;
+      position: relative;
+    }
+
+    .reset-link::after {
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      background: var(--muted);
+      transition: background 0.3s, transform 0.3s;
+      transform: scaleX(0);
+      transform-origin: right;
+    }
+
+    .reset-link:hover {
+      color: var(--gold);
+    }
+
+    .reset-link:hover::after {
+      background: var(--gold);
+      transform: scaleX(1);
+      transform-origin: left;
+    }
+
+    /* ══════════════════════════════════════════
+   RESULT PANEL
+══════════════════════════════════════════ */
+    .result {
+      display: none;
+      margin-top: 2rem;
+      animation: panelIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both
+    }
+
+    @keyframes panelIn {
+      from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.98)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1)
+      }
+    }
+
+    .orn {
+      text-align: center;
+      color: rgba(201, 168, 76, 0.25);
+      letter-spacing: 10px;
+      font-size: 13px;
+      margin: 0.5rem 0 1.5rem;
+      font-family: 'Share Tech Mono', monospace
+    }
+
+    .assess-title {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 4px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 1rem
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-bottom: 1.3rem
+    }
+
+    .chip {
+      background: rgba(201, 168, 76, 0.05);
+      border: 1px solid rgba(201, 168, 76, 0.12);
+      border-radius: 20px;
+      padding: 0.28rem 0.85rem;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9.5px;
+      color: #9a8050;
+      letter-spacing: 0.5px;
+    }
+
+    .chip b {
+      color: var(--gold)
+    }
+
+    /* Meter */
+    .meter {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 1rem
+    }
+
+    .bar {
+      flex: 1;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.06);
+      transition: background 0.6s cubic-bezier(.4, 0, .2, 1), transform 0.3s;
+      transform-origin: left;
+    }
+
+    .bar.lit {
+      transform: scaleY(2)
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0.3rem 1rem;
+      border-radius: 30px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 0.9rem;
+      border: 1px solid;
+    }
+
+    .badge-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      animation: pulseDot 2s infinite
+    }
+
+    .str-level {
+      font-family: 'Cinzel', serif;
+      font-size: 1.7rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      letter-spacing: 3px;
+    }
+
+    .str-desc {
+      font-size: 1.05rem;
+      font-style: italic;
+      color: var(--muted);
+      line-height: 1.7;
+      margin-bottom: 1.8rem;
+    }
+
+    .str-desc em {
+      color: var(--gold);
+      font-style: normal;
+      font-weight: 600
+    }
+
+    /* Gen block */
+    .gen-block {
+      padding-top: 1.5rem;
+      border-top: 1px solid rgba(201, 168, 76, 0.09)
+    }
+
+    .gen-title {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 3.5px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 0.8rem
+    }
+
+    .auto-note {
+      font-style: italic;
+      font-size: 0.92rem;
+      color: #8a7040;
+      margin-bottom: 1rem
+    }
+
+    .choice-btns {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 1rem
+    }
+
+    .choice-btn {
+      padding: 0.65rem 1.4rem;
+      background: transparent;
+      border: 1px solid rgba(201, 168, 76, 0.28);
+      border-radius: 8px;
+      color: var(--gold);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .choice-btn:hover {
+      background: rgba(201, 168, 76, 0.09);
+      border-color: rgba(201, 168, 76, 0.6);
+      box-shadow: 0 0 14px rgba(201, 168, 76, 0.12)
+    }
+
+    .choice-btn.selected {
+      border-color: var(--gold) !important;
+      background: rgba(212, 175, 55, 0.2) !important;
+      box-shadow: 0 0 25px rgba(212, 175, 55, 0.5) !important;
+      transform: translateY(-2px);
+      color: var(--gold) !important;
+    }
+
+    /* Password box */
+    .pwd-box {
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(201, 168, 76, 0.28);
+      border-radius: 12px;
+      padding: 1.2rem 1.4rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-top: 0.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Glitch scan line on pwd box */
+    .pwd-box::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: rgba(201, 168, 76, 0.3);
+      animation: pwdScan 3s linear infinite;
+    }
+
+    @keyframes pwdScan {
+      0% {
+        top: -1px;
+        opacity: 0
+      }
+
+      10% {
+        opacity: 1
+      }
+
+      90% {
+        opacity: 0.5
+      }
+
+      100% {
+        top: 101%;
+        opacity: 0
+      }
+    }
+
+    .pwd-text {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.9rem;
+      color: var(--gold2);
+      word-break: break-all;
+      letter-spacing: 3px;
+      flex: 1;
+      animation: typeIn 0.5s steps(20) both;
+      text-shadow: 0 0 10px rgba(245, 214, 120, 0.3);
+    }
+
+    @keyframes typeIn {
+      from {
+        clip-path: inset(0 100% 0 0)
+      }
+
+      to {
+        clip-path: inset(0 0% 0 0)
+      }
+    }
+
+    .copy-btn {
+      flex-shrink: 0;
+      padding: 0.5rem 1rem;
+      background: rgba(201, 168, 76, 0.1);
+      border: 1px solid rgba(201, 168, 76, 0.28);
+      border-radius: 7px;
+      color: var(--gold);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.3s;
+    }
+
+    .copy-btn:hover {
+      background: rgba(201, 168, 76, 0.2);
+      border-color: rgba(201, 168, 76, 0.6)
+    }
+
+    .copy-btn.done {
+      color: var(--strong);
+      border-color: rgba(76, 175, 116, 0.4);
+      background: rgba(76, 175, 116, 0.08)
+    }
+
+    .regen-btn {
+      background: rgba(201, 168, 76, 0.06);
+      border-color: rgba(201, 168, 76, 0.22);
+      color: var(--muted);
+      transition: all 0.3s;
+    }
+
+    .regen-btn:hover {
+      background: rgba(201, 168, 76, 0.15);
+      border-color: rgba(201, 168, 76, 0.55);
+      color: var(--gold);
+    }
+
+    .pwd-hint {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .pwd-hint em {
+      color: rgba(201, 168, 76, 0.6);
+      font-style: normal;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    /* Strength level colors */
+    .weak-col {
+      color: var(--weak)
+    }
+
+    .med-col {
+      color: var(--medium)
+    }
+
+    .str-col {
+      color: var(--strong)
+    }
+
+    /* ══════════════════════════════════════════
+   VAULT DOOR ANIMATION (modal on analyze)
+══════════════════════════════════════════ */
+    .vault-flash {
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, rgba(201, 168, 76, 0.15) 0%, transparent 70%);
+      opacity: 0;
+      animation: none;
+    }
+
+    .vault-flash.active {
+      animation: flashPulse 0.6s ease-out
+    }
+
+    @keyframes flashPulse {
+      0% {
+        opacity: 0
+      }
+
+      20% {
+        opacity: 1
+      }
+
+      100% {
+        opacity: 0
+      }
+    }
+
+    /* ══════════════════════════════════════════
+   TIPS ROW
+══════════════════════════════════════════ */
+    .tips {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      gap: 12px;
+      margin-top: 2rem;
+      padding-top: 2rem;
+      border-top: 1px solid rgba(201, 168, 76, 0.07);
+    }
+
+    .tip {
+      background: rgba(201, 168, 76, 0.035);
+      border: 1px solid rgba(201, 168, 76, 0.09);
+      border-radius: 12px;
+      padding: 1rem;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    .tip:hover {
+      border-color: rgba(201, 168, 76, 0.2);
+      box-shadow: 0 0 20px rgba(201, 168, 76, 0.06)
+    }
+
+    .tip-ico {
+      font-size: 20px;
+      margin-bottom: 0.5rem
+    }
+
+    .tip-t {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 0.3rem
+    }
+
+    .tip-b {
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.55;
+      font-style: italic
+    }
+
+    /* ══════════════════════════════════════════
+   PARTICLE BURST (copy feedback)
+══════════════════════════════════════════ */
+    .particle {
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+
+      /* Internal Vault Doors */
+      .vault-door-container {
+        position: absolute;
+        inset: 0;
+        z-index: 50;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: #0a0a0f;
+      }
+
+      .v-door {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 50%;
+        background: linear-gradient(135deg, #181820, #0a0a0f);
+        border: 2px solid rgba(201, 168, 76, 0.2);
+        box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.8);
+        transition: transform 1s cubic-bezier(0.76, 0, 0.24, 1) 0.5s;
+      }
+
+      .v-door-left {
+        left: 0;
+        border-right: none;
+      }
+
+      .v-door-right {
+        right: 0;
+        border-left: none;
+      }
+
+      .v-lock-center {
+        position: absolute;
+        z-index: 51;
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #2a2a2a, #0a0a0f);
+        border: 3px solid var(--gold);
+        box-shadow: 0 0 20px var(--gold-glow);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transition: transform 0.6s ease-in-out, opacity 0.5s ease-in 0.5s;
+      }
+
+      .v-wheel {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .v-spoke {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: 6px;
+        background: var(--gold);
+        transform-origin: center;
+        margin-top: -3px;
+      }
+
+      .v-spoke:nth-child(2) {
+        transform: rotate(45deg);
+      }
+
+      .v-spoke:nth-child(3) {
+        transform: rotate(90deg);
+      }
+
+      .v-spoke:nth-child(4) {
+        transform: rotate(135deg);
+      }
+
+
+      .v-core {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #0a0a0f;
+        border: 2px solid var(--gold2);
+        z-index: 10;
+      }
+
+      .vault-door-container.unlocked .v-lock-center {
+        transform: rotate(180deg) scale(0.8);
+        opacity: 0;
+      }
+
+      .vault-door-container.unlocked .v-door-left {
+        transform: translateX(-100%);
+      }
+
+      .vault-door-container.unlocked .v-door-right {
+        transform: translateX(100%);
+      }
+
+      .vault-door-container.unlocked {
+        pointer-events: none;
+        background: transparent;
+        transition: background 0.1s 0.5s;
+      }
+
+
+      @keyframes particleFly {
+        0% {
+          transform: translate(0, 0) scale(1);
+          opacity: 1
+        }
+
+        100% {
+          transform: translate(var(--tx), var(--ty)) scale(0);
+          opacity: 0
+        }
+      }
+
+      /* ══════════════════════════════════════════
+   FOOTER
+══════════════════════════════════════════ */
+
+      position: fixed;
+      bottom: 2rem;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    footer p {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 8.5px;
+      letter-spacing: 3px;
+      color: var(--gold);
+      opacity: 0.45;
+      text-transform: uppercase;
+      margin: 0;
+      text-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
+      line-height: 1.4;
+    }
+
+    @media(max-width: 800px) {
+      footer {
+        bottom: 1rem;
+      }
+
+      footer p {
+        font-size: 7.5px;
+      }
+
+      .sound-toggle {
+        bottom: 4rem;
+      }
+    }
+
+    @media(max-width:500px) {
+      .page {
+        padding: 2rem 1rem 4rem
+      }
+
+      .card {
+        padding: 1.8rem 1.2rem
+      }
+
+      h1 {
+        font-size: 1.8rem;
+        letter-spacing: 3px
+      }
+
+      .choice-btns {
+        flex-direction: column
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="bg-orb"></div>
+
+  <button class="sound-toggle on" id="soundBtn" onclick="toggleSound()" title="Toggle sound">
+    <svg id="soundOnIcon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+    </svg>
+    <svg id="soundOffIcon" style="display:none" width="24" height="24" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+      <line x1="23" y1="9" x2="17" y2="15"></line>
+      <line x1="17" y1="9" x2="23" y2="15"></line>
+    </svg>
+  </button>
+
+  <!-- Audio context sounds via Web Audio API (no files needed) -->
+
+  <canvas id="bg-canvas"></canvas>
+  <div class="vault-symbols" id="vaultSymbols"></div>
+  <div class="scanlines"></div>
+  <div class="scan-beam"></div>
+  <div class="vault-flash" id="vaultFlash"></div>
+
+  <div class="page">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="vault-emblem">
+        <div class="vault-ring"></div>
+        <div class="vault-ring-2"></div>
+        <div class="vault-ring-3"></div>
+        <div class="vault-notch"></div>
+      </div>
+      <p class="eyebrow">⬡ Secure Vault &nbsp;·&nbsp; Zero Storage &nbsp;·&nbsp; Client-Side ⬡</p>
+      <h1>VAULT</h1>
+      <p class="tagline">Enter your name — receive your password</p>
+      <div class="deco">
+        <div class="deco-line"></div>
+        <span class="deco-sym">⬡ ✦ ⬡</span>
+        <div class="deco-line"></div>
+      </div>
+    </header>
+
+    <!-- Card -->
+    <div class="card">
+      <div class="co co-tl"></div>
+      <div class="co co-tr"></div>
+      <div class="co co-bl"></div>
+      <div class="co co-br"></div>
+
+      <div class="form-group" style="margin-bottom: 1.5rem;">
+        <label class="field-lbl" for="nameIn">⬡ &nbsp; Enter Your Name <span style="color:var(--weak)">*</span></label>
+        <div class="input-wrap">
+          <span class="input-ico">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+              stroke-linecap="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </span>
+          <input type="text" id="nameIn" placeholder="Your name becomes your key…" maxlength="40" autocomplete="off"
+            spellcheck="false" oninput="this.value = this.value.replace(/[^a-zA-Z ]/g, '')" />
+        </div>
+      </div>
+
+      <div class="form-row" style="display: flex; gap: 1.5rem; margin-bottom: 2rem; align-items: center;">
+        <div class="form-group" style="flex: 1;">
+          <label class="field-lbl" for="dobIn">⬡ &nbsp; Date of Birth (Optional)</label>
+          <div class="input-wrap">
+            <span class="input-ico">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+            </span>
+            <input type="text" id="dobIn" placeholder="YYYY (e.g. 1995)" autocomplete="off" inputmode="numeric"
+              pattern="\d*" oninput="this.value = this.value.replace(/[^0-9]/g, '')" maxlength="8" />
+          </div>
+        </div>
+
+        <div class="form-divider"
+          style="width: 2px; height: 50px; background: linear-gradient(transparent, rgba(201,168,76,0.3), transparent); margin-top: 25px;">
+        </div>
+
+        <div class="form-group" style="flex: 1;">
+          <label class="field-lbl" for="placeIn">⬡ &nbsp; Place (Optional)</label>
+          <div class="input-wrap">
+            <span class="input-ico">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+            </span>
+            <input type="text" id="placeIn" placeholder="City or location…" autocomplete="off" spellcheck="false"
+              oninput="this.value = this.value.replace(/[^a-zA-Z ]/g, '')" />
+          </div>
+        </div>
+      </div>
+
+      <button class="analyze-btn" onclick="analyze()">
+        ✦ &nbsp; Unlock Your Password &nbsp; ✦
+      </button>
+
+      <div style="text-align: center;">
+        <button class="reset-link" onclick="resetForm()">⟲ Start Over</button>
+      </div>
+
+      <!-- Result -->
+      <div class="result" id="panel" style="position: relative; overflow: hidden; padding: 0;">
+        <!-- Vault Doors overlaying the panel -->
+        <div class="vault-door-container" id="vaultDoorContainer">
+          <div class="v-door v-door-left"></div>
+          <div class="v-door v-door-right"></div>
+          <div class="v-lock-center" id="vLockCenter">
+            <div class="v-wheel">
+              <div class="v-spoke"></div>
+              <div class="v-spoke"></div>
+              <div class="v-spoke"></div>
+              <div class="v-spoke"></div>
+            </div>
+            <div class="v-core"></div>
+          </div>
+        </div>
+
+        <!-- Panel Content -->
+        <div class="panel-content" id="panelContent"
+          style="opacity: 0; padding: 3rem 2rem; text-align: center; min-height: 250px; display: flex; flex-direction: column; justify-content: center;">
+          <h2
+            style="font-family: 'Cinzel', serif; font-size: 1.8rem; font-weight: 700; color: var(--gold); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 0.5rem; text-shadow: 0 0 10px rgba(201,168,76,0.3);">
+            ⬡ Vault System Activated ⬡</h2>
+          <p class="auto-note" style="margin-bottom: 2.5rem; font-size: 1.1rem; color: #a9a9a9;">Select a fortification
+            protocol to process your credentials.</p>
+          <div class="choice-btns" style="justify-content: center; gap: 1.5rem;">
+            <button class="choice-btn" id="stdBtn" style="padding: 1rem 2rem; font-size: 1rem;">⬡ &nbsp; Standard
+              Grade</button>
+            <button class="choice-btn" id="eliteBtn"
+              style="padding: 1rem 2rem; font-size: 1rem; border-color: var(--gold); box-shadow: 0 0 15px rgba(201,168,76,0.2);">✦
+              &nbsp; Elite Grade</button>
+          </div>
+          <div id="pwdResult" style="margin-top: 2rem;"></div>
+        </div>
+      </div>
+
+      <!-- Tips -->
+      <div class="tips">
+        <div class="tip">
+          <div class="tip-ico">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <div class="tip-t">Uniqueness</div>
+          <p class="tip-b">Never reuse passwords — each realm deserves its own key.</p>
+        </div>
+        <div class="tip">
+          <div class="tip-ico">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path
+                d="M21.3 15.3l-7.6-7.6a2 2 0 0 0-2.8 0l-2.8 2.8a2 2 0 0 0 0 2.8l7.6 7.6a2 2 0 0 0 2.8 0l2.8-2.8a2 2 0 0 0 0-2.8z">
+              </path>
+              <path d="M14.5 17.5L16 19"></path>
+              <path d="M11.5 14.5L13 16"></path>
+              <path d="M8.5 11.5L10 13"></path>
+              <path d="M5.5 8.5L7 10"></path>
+              <path d="M3.5 6.5L2 5"></path>
+            </svg>
+          </div>
+          <div class="tip-t">Length</div>
+          <p class="tip-b">Every extra character multiplies cracking resistance exponentially.</p>
+        </div>
+        <div class="tip">
+          <div class="tip-ico">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 3H15M10 9L6 20a2 2 0 0 0 1.5 3h9A2 2 0 0 0 18 20L14 9V3M10 9V3M14 9V3"></path>
+              <path d="M6 16h12"></path>
+            </svg>
+          </div>
+          <div class="tip-t">Entropy</div>
+          <p class="tip-b">Symbols, numbers, and mixed case forge unbreakable fortresses.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
+  <script>
+    /* ══════════════════════════════
+       WEB AUDIO ENGINE
+    ══════════════════════════════ */
+    let soundOn = true;
+    let audioCtx = null;
+
+    function getAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      return audioCtx;
+    }
+
+    function playTone(freq, type, duration, vol, delay = 0) {
+      if (!soundOn) return;
+      try {
+        const ctx = getAudio();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+        gain.gain.setValueAtTime(vol, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + duration);
+      } catch (e) { }
+    }
+
+    function playVaultUnlock() {
+      // Mechanical click sequence
+      [0, 0.08, 0.16].forEach(d => playTone(180 + d * 200, 'square', 0.06, 0.15, d));
+      playTone(440, 'sine', 0.4, 0.12, 0.25);
+      playTone(660, 'sine', 0.3, 0.08, 0.45);
+      playTone(880, 'sine', 0.2, 0.06, 0.6);
+    }
+
+    function playWeakAlert() {
+      playTone(220, 'sawtooth', 0.3, 0.15);
+      playTone(180, 'sawtooth', 0.3, 0.12, 0.15);
+      playTone(160, 'sawtooth', 0.4, 0.10, 0.3);
+    }
+
+    function playMediumChime() {
+      playTone(330, 'sine', 0.3, 0.12);
+      playTone(440, 'sine', 0.25, 0.10, 0.2);
+      playTone(550, 'sine', 0.2, 0.08, 0.35);
+    }
+
+    function playStrongFanfare() {
+      [523, 659, 784, 1047].forEach((f, i) => playTone(f, 'sine', 0.35 - i * 0.04, 0.14 - i * 0.02, i * 0.1));
+    }
+
+    function playCopySound() {
+      playTone(880, 'sine', 0.1, 0.1);
+      playTone(1100, 'sine', 0.15, 0.08, 0.08);
+    }
+
+    function playClickSound() {
+      playTone(200, 'square', 0.05, 0.2);
+    }
+
+    function toggleSound() {
+      soundOn = !soundOn;
+      const btn = document.getElementById('soundBtn');
+      document.getElementById('soundOnIcon').style.display = soundOn ? 'block' : 'none';
+      document.getElementById('soundOffIcon').style.display = soundOn ? 'none' : 'block';
+      btn.classList.toggle('on', soundOn);
+      if (soundOn) playTone(660, 'sine', 0.15, 0.1);
+    }
+
+    function resetForm() {
+      playClickSound();
+      document.getElementById('nameIn').value = '';
+      document.getElementById('dobIn').value = '';
+      document.getElementById('placeIn').value = '';
+      const panel = document.getElementById('panel');
+      panel.style.display = 'none';
+      document.getElementById('nameIn').focus();
+    }
+
+    /* ══════════════════════════════
+       PARTICLE CANVAS BACKGROUND
+    ══════════════════════════════ */
+    const canvas = document.getElementById('bg-canvas');
+    const ctx2 = canvas.getContext('2d');
+    let W, H, particles = [];
+
+    function resize() {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Grid lines
+    function drawGrid() {
+      ctx2.clearRect(0, 0, W, H);
+      ctx2.strokeStyle = 'rgba(201,168,76,0.025)';
+      ctx2.lineWidth = 0.5;
+      const sz = 60;
+      for (let x = 0; x < W; x += sz) {
+        ctx2.beginPath(); ctx2.moveTo(x, 0); ctx2.lineTo(x, H); ctx2.stroke();
+      }
+      for (let y = 0; y < H; y += sz) {
+        ctx2.beginPath(); ctx2.moveTo(0, y); ctx2.lineTo(W, y); ctx2.stroke();
+      }
+      // Dot intersections
+      ctx2.fillStyle = 'rgba(201,168,76,0.05)';
+      for (let x = 0; x < W; x += sz) {
+        for (let y = 0; y < H; y += sz) {
+          ctx2.beginPath(); ctx2.arc(x, y, 1, 0, Math.PI * 2); ctx2.fill();
+        }
+      }
+      // Floating particles
+      particles.forEach(p => {
+        p.y -= p.speed; p.opacity -= 0.003;
+        if (p.y < -10 || p.opacity <= 0) {
+          p.y = H + 10; p.x = Math.random() * W; p.opacity = Math.random() * 0.4 + 0.1;
+        }
+        ctx2.globalAlpha = p.opacity;
+        ctx2.fillStyle = 'rgba(201,168,76,1)';
+        ctx2.beginPath(); ctx2.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx2.fill();
+        ctx2.globalAlpha = 1;
+      });
+      requestAnimationFrame(drawGrid);
+    }
+
+    for (let i = 0; i < 150; i++) {
+      particles.push({ x: Math.random() * window.innerWidth, y: Math.random() * window.innerHeight, speed: 0.2 + Math.random() * 0.5, size: 0.5 + Math.random() * 1.5, opacity: Math.random() * 0.6 });
+    }
+    drawGrid();
+
+    /* ══════════════════════════════
+       FLOATING VAULT SYMBOLS
+    ══════════════════════════════ */
+    const SYMS = ['⬡', '✦', '⬢', '◈', '⬟', '❖', '◇', '⬠', '✧', '⬣', '⊕', '⊗', '⊞', '⊟', '⌘', '⎈', '⬦'];
+    const container = document.getElementById('vaultSymbols');
+
+    function spawnSym() {
+      const el = document.createElement('div');
+      el.className = 'vsym';
+      el.textContent = SYMS[Math.floor(Math.random() * SYMS.length)];
+      el.style.left = Math.random() * 100 + 'vw';
+      el.style.fontSize = (14 + Math.random() * 28) + 'px';
+      el.style.opacity = Math.random() * 0.12 + 0.03;
+      const dur = 12 + Math.random() * 18;
+      el.style.animationDuration = dur + 's';
+      el.style.animationDelay = (-Math.random() * dur) + 's';
+      container.appendChild(el);
+      setTimeout(() => el.remove(), (dur + 2) * 1000);
+    }
+    for (let i = 0; i < 25; i++) spawnSym();
+    setInterval(spawnSym, 1800);
+
+    /* ══════════════════════════════
+       PASSWORD LOGIC
+    ══════════════════════════════ */
+    function scoreInput(p) {
+      let s = 0;
+      if (p.length >= 6) s++;
+      if (p.length >= 10) s++;
+      if (/[A-Z]/.test(p)) s++;
+      if (/[a-z]/.test(p)) s++;
+      if (/[0-9]/.test(p)) s++;
+      if (/[^A-Za-z0-9]/.test(p)) s++;
+      if (p.length >= 14) s++;
+      return s;
+    }
+
+    function getLevel(s) {
+      if (s <= 2) return 'weak';
+      if (s <= 4) return 'medium';
+      return 'strong';
+    }
+
+    /* ══════════════════════════════
+       MEMORABLE PASSWORD ENGINE
+    ══════════════════════════════ */
+    const SPECIALS = ['@', '#', '$', '!', '&', '*', '%', '-'];
+
+    function formatName(nameStr, style, isElite) {
+      const parts = nameStr.trim().split(/\s+/);
+      if (parts.length === 0) return '';
+
+      let formatted = '';
+      if (style === 0) {
+        // e.g. RupamSEN
+        if (parts.length === 1) formatted = parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase();
+        else {
+          formatted = parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase();
+          for (let i = 1; i < parts.length; i++) formatted += parts[i].toUpperCase();
+        }
+      } else if (style === 1) {
+        // e.g. RuPam_sEn
+        formatted = nameStr.trim().split('').map((c, i) => {
+          if (c === ' ') return '_';
+          return i % 2 === 0 ? c.toUpperCase() : c.toLowerCase();
+        }).join('');
+      } else if (style === 2) {
+        // e.g. rupam_sen
+        formatted = nameStr.trim().replace(/\s+/g, '_').toLowerCase();
+      } else {
+        // e.g. RUPAM_sen
+        if (parts.length === 1) formatted = parts[0].toUpperCase();
+        else {
+          formatted = parts[0].toUpperCase();
+          for (let i = 1; i < parts.length; i++) formatted += '_' + parts[i].toLowerCase();
+        }
+      }
+
+      if (isElite && Math.random() > 0.4) {
+        // In elite mode, occasionally split words and embed symbols for maximum security
+        const syms = ['@', '#', '$', '*', '-', '_'];
+        const randSym = syms[Math.floor(Math.random() * syms.length)];
+        const chars = formatted.split('');
+        if (chars.length > 4) {
+          const insertIdx = Math.floor(chars.length / 2);
+          chars.splice(insertIdx, 0, randSym);
+          formatted = chars.join('');
+        }
+      }
+
+      return formatted;
+    }
+
+    // Build a memorable password strictly from user inputs + numbers + symbols
+    // Returns { password, pattern } where pattern explains the structure
+    function generateMemorablePassword(name, isElite = false, dob = '', place = '') {
+      const seed = Math.floor(Math.random() * 10000000);
+      const SYMS = ['@', '#', '$', '*', '!', '%', '&', '-', '_'];
+      const sym  = SYMS[seed % SYMS.length];
+      const sym2 = SYMS[(seed + 4) % SYMS.length];
+      const num  = (seed % 90) + 10; // 10-99
+      const style = seed % 4;
+      const formattedName = formatName(name, style, isElite);
+
+      let userDob = dob.trim();
+      // Elite mode can dynamically shrink years e.g. 2009 -> 09
+      if (isElite && userDob.length === 4 && Math.random() > 0.5) {
+        userDob = Math.random() > 0.5 ? userDob.slice(-2) : userDob.slice(0, 2) + '-' + userDob.slice(-2);
+      }
+
+      let userLoc = place.trim();
+      if (userLoc) {
+        userLoc = formatName(userLoc, (style + 1) % 4, isElite);
+      }
+
+      // Collect available parts (name is always the anchor)
+      const availableParts = [{ key: 'name', val: formattedName }];
+      if (userDob) availableParts.push({ key: 'dob', val: userDob });
+      if (userLoc) availableParts.push({ key: 'loc', val: userLoc });
+
+      // Weighted part count: 25% = 1 part, 50% = 2 parts, 25% = 3 parts
+      const roll = Math.random();
+      let partCount = roll < 0.25 ? 1 : roll < 0.75 ? 2 : 3;
+      partCount = Math.min(partCount, availableParts.length);
+
+      // Shuffle and always keep name in selection
+      const shuffled = [...availableParts];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const nameIdx = shuffled.findIndex(p => p.key === 'name');
+      if (nameIdx >= partCount) [shuffled[0], shuffled[nameIdx]] = [shuffled[nameIdx], shuffled[0]];
+      const chosen = shuffled.slice(0, partCount).map(p => p.val);
+
+      // Add number token when only 1 part (for entropy)
+      if (partCount === 1) chosen.push(String(num));
+
+      // Build password
+      let pwd;
+      if (isElite) {
+        const eliteSyms = ['@', '#', '$', '!', '%'];
+        const s1 = eliteSyms[seed % eliteSyms.length];
+        const s2 = eliteSyms[(seed + 2) % eliteSyms.length];
+        if (chosen.length <= 2) {
+          const variants = [
+            `${s1}${chosen[0]}${s2}${chosen[1] || ''}`,
+            `${chosen[0]}${s1}${chosen[1] || ''}${s2}`,
+            `${s1}${chosen[0]}${chosen[1] || ''}${s2}`,
+          ];
+          pwd = variants[seed % variants.length];
+        } else {
+          const variants = [
+            `${chosen[0]}${s1}${chosen[1]}${s2}${chosen[2]}`,
+            `${s1}${chosen[0]}${chosen[1]}${s2}${chosen[2]}`,
+            `${chosen[0]}${chosen[1]}${s1}${chosen[2]}${s2}`,
+          ];
+          pwd = variants[seed % variants.length];
+        }
+      } else {
+        const seps = [sym, sym2, '#', '_', '-'];
+        const sep = seps[seed % seps.length];
+        pwd = chosen.join(sep);
+      }
+
+      // Guarantee at least one special character
+      if (!/[^a-zA-Z0-9]/.test(pwd)) pwd = `${sym}${pwd}${sym2}`;
+
+      // Build readable hint
+      const labels = { name: 'Name', dob: 'DOB', loc: 'Place' };
+      const usedKeys = shuffled.slice(0, partCount).map(p => labels[p.key]);
+      if (partCount === 1) usedKeys.push('Number');
+      const hint = usedKeys.join(' + Symbol + ') + (isElite ? ' [Elite]' : ' [Standard]');
+
+      return { pwd, hint };
+    }
+
+    // Kept for backward compat with medium grade buttons
+    function generatePassword(name, style = 'standard') {
+      const v = style === 'elite' ? 1 : 0;
+      return generateMemorablePassword(name, v).pwd;
+    }
+
+    /* ══════════════════════════════
+       RENDER HELPERS
+    ══════════════════════════════ */
+    function renderBars(count, color) {
+      for (let i = 1; i <= 5; i++) {
+        const b = document.getElementById('b' + i);
+        if (i <= count) {
+          b.style.background = color;
+          b.style.boxShadow = `0 0 6px ${color}80`;
+          b.classList.add('lit');
+        } else {
+          b.style.background = 'rgba(255,255,255,0.06)';
+          b.style.boxShadow = 'none';
+          b.classList.remove('lit');
+        }
+      }
+    }
+
+    function pwdBoxHTML(pwd, hint, name, variation, dob = '', place = '') {
+      const safe = pwd.replace(/'/g, "\\'");
+      const safeName = (name || '').replace(/'/g, "\\'");
+      const safeDob = (dob || '').replace(/'/g, "\\'");
+      const safePlace = (place || '').replace(/'/g, "\\'");
+      return `
+        <div class="pwd-hint">Pattern: <em>${hint || ''}</em></div>
+        <div class="pwd-box">
+          <span class="pwd-text" id="pwdTxt">${pwd}</span>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="copy-btn" id="copyBtn" onclick="copyPwd('${safe}')">Copy</button>
+            <button class="copy-btn regen-btn" id="regenBtn" onclick="regenPassword('${safeName}',${(variation || 0) + 1},'${safeDob}','${safePlace}')" title="Try a different password">↺ New</button>
+          </div>
+        </div>`;
+    }
+
+    /* ══════════════════════════════
+       PARTICLE BURST
+    ══════════════════════════════ */
+    function burst(x, y) {
+      for (let i = 0; i < 14; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        const angle = (Math.PI * 2 * i) / 14;
+        const dist = 40 + Math.random() * 60;
+        p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+        p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+        p.style.left = x + 'px'; p.style.top = y + 'px';
+        p.style.background = Math.random() > 0.5 ? 'var(--gold)' : 'var(--gold2)';
+        document.body.appendChild(p);
+        setTimeout(() => p.remove(), 900);
+      }
+    }
+
+    /* ══════════════════════════════
+       COPY
+    ══════════════════════════════ */
+    function copyPwd(pwd) {
+      navigator.clipboard.writeText(pwd).then(() => {
+        const btn = document.getElementById('copyBtn');
+        if (btn) { btn.textContent = 'Copied!'; btn.classList.add('done'); }
+        const box = document.querySelector('.pwd-box');
+        if (box) { const r = box.getBoundingClientRect(); burst(r.left + r.width / 2, r.top + r.height / 2); }
+        playCopySound();
+        setTimeout(() => { if (btn) { btn.textContent = 'Copy'; btn.classList.remove('done'); } }, 2200);
+      }).catch(() => {
+        const btn = document.getElementById('copyBtn');
+        if (btn) { btn.textContent = 'Error'; setTimeout(() => btn.textContent = 'Copy', 1500); }
+      });
+    }
+
+    /* ══════════════════════════════
+       GENERATE & SHOW (medium choice)
+    ══════════════════════════════ */
+    let _currentIsElite = false;
+
+    function genAndShow(style, name, isEliteFlag, dob = '', place = '') {
+      playClickSound();
+      const isElite = style === 'elite' || isEliteFlag === true;
+      _currentIsElite = isElite;
+      const { pwd, hint } = generateMemorablePassword(name, isElite, dob, place);
+      const el = document.getElementById('pwdResult');
+      if (el) { el.innerHTML = pwdBoxHTML(pwd, hint, name, isElite, dob, place); }
+
+      const stdBtn = document.getElementById('stdBtn');
+      const eliteBtn = document.getElementById('eliteBtn');
+      if (stdBtn && eliteBtn) {
+        stdBtn.classList.remove('selected');
+        eliteBtn.classList.remove('selected');
+        if (style === 'elite' || isEliteFlag === true) eliteBtn.classList.add('selected');
+        else stdBtn.classList.add('selected');
+      }
+    }
+
+    function regenPassword(name, isEliteFlag, dob = '', place = '') {
+      playClickSound();
+      _currentIsElite = isEliteFlag;
+      const { pwd, hint } = generateMemorablePassword(name, isEliteFlag, dob, place);
+      // update whatever pwd-box is visible
+      const box = document.querySelector('.pwd-box');
+      if (box) {
+        const txt = box.querySelector('#pwdTxt');
+        const hintEl = box.closest('[id]')?.previousElementSibling || document.querySelector('.pwd-hint');
+        if (txt) { txt.textContent = pwd; txt.style.animation = 'none'; void txt.offsetWidth; txt.style.animation = 'typeIn 0.5s steps(20) both'; }
+        if (hintEl && hintEl.classList.contains('pwd-hint')) hintEl.innerHTML = `Pattern: <em>${hint}</em>`;
+        const copyBtn = box.querySelector('#copyBtn');
+        const safe = pwd.replace(/'/g, "\\'");
+        const safeName = name.replace(/'/g, "\\'");
+        const safeDob = dob.replace(/'/g, "\\'");
+        const safePlace = place.replace(/'/g, "\\'");
+        if (copyBtn) copyBtn.setAttribute('onclick', `copyPwd('${safe}')`);
+        const regenBtn = box.querySelector('#regenBtn');
+        if (regenBtn) regenBtn.setAttribute('onclick', `regenPassword('${safeName}',${variation + 1},'${safeDob}','${safePlace}')`);
+      }
+    }
+
+    /* ══════════════════════════════
+       MAIN ANALYZE
+    ══════════════════════════════ */
+    function analyze() {
+      const name = document.getElementById('nameIn').value.trim();
+      const dob = document.getElementById('dobIn').value;
+      const place = document.getElementById('placeIn').value.trim();
+      if (!name) { document.getElementById('nameIn').focus(); playTone(200, 'square', 0.1, 0.15); return; }
+
+      playClickSound();
+
+      // Ensure panel is visible and reset state
+      const panel = document.getElementById('panel');
+      panel.style.display = 'block';
+      panel.style.animation = 'none';
+      void panel.offsetWidth;
+      panel.style.animation = 'panelIn 0.6s cubic-bezier(0.34,1.56,0.64,1) both';
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      const doorContainer = document.getElementById('vaultDoorContainer');
+      const panelContent = document.getElementById('panelContent');
+
+      doorContainer.classList.remove('unlocked');
+      panelContent.style.opacity = '0';
+
+      const safeName = name.replace(/'/g, "\\'");
+      const safeDob = dob.replace(/'/g, "\\'");
+      const safePlace = place.replace(/'/g, "\\'");
+
+      const stdBtn = document.getElementById('stdBtn');
+      const eliteBtn = document.getElementById('eliteBtn');
+      stdBtn.setAttribute('onclick', `genAndShow('standard','${safeName}',false,'${safeDob}','${safePlace}')`);
+      eliteBtn.setAttribute('onclick', `genAndShow('elite','${safeName}',true,'${safeDob}','${safePlace}')`);
+      stdBtn.classList.remove('selected');
+      eliteBtn.classList.remove('selected');
+
+      document.getElementById('pwdResult').innerHTML = '';
+
+      // Trigger animation immediately for snappier feedback
+      if (soundOn) playTone(300, 'sine', 0.1, 0.5); // Lock turning sound
+
+      setTimeout(() => {
+        playVaultUnlock(); // Doors opening sound
+        doorContainer.classList.add('unlocked');
+        setTimeout(() => {
+          panelContent.style.transition = 'opacity 0.6s ease-in';
+          panelContent.style.opacity = '1';
+        }, 500); // Shorter delay so UI feels faster
+      }, 350);
+    }
+
+    // Enter key & Keyboard sounds
+    const inputs = ['nameIn', 'dobIn', 'placeIn'];
+    inputs.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('keydown', e => { if (e.key === 'Enter') analyze(); });
+        el.addEventListener('input', () => { if (soundOn) playTone(300 + Math.random() * 200, 'square', 0.04, 0.08); });
+      }
+    });
+  </script>
+</body>
+
+</html>
